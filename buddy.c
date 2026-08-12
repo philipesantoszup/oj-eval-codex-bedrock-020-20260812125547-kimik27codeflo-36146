@@ -23,6 +23,11 @@ static inline unsigned long ptr_to_off(void *p)
     return ((unsigned long)p - (unsigned long)base) >> PAGE_SHIFT;
 }
 
+static inline int is_page_aligned(void *p)
+{
+    return (((unsigned long)p - (unsigned long)base) & (PAGE_SIZE - 1)) == 0;
+}
+
 static inline void *off_to_ptr(int off)
 {
     return (void *)((unsigned long)base + ((unsigned long)off << PAGE_SHIFT));
@@ -94,21 +99,30 @@ int init_page(void *p, int pgcount)
 void *alloc_pages(int rank)
 {
     int r, pages, off, i;
+    int best_rank = -1;
+    unsigned long best_off = 0;
+    struct node *best_node = NULL;
     struct node *n;
 
     if (rank < MIN_RANK || rank > MAX_RANK)
         return ERR_PTR(-EINVAL);
 
     for (r = rank; r <= MAX_RANK; ++r) {
-        if (free_list[r])
-            break;
+        for (n = free_list[r]; n != NULL; n = n->next) {
+            unsigned long o = ptr_to_off(n);
+            if (best_node == NULL || o < best_off) {
+                best_rank = r;
+                best_off = o;
+                best_node = n;
+            }
+        }
     }
-    if (r > MAX_RANK)
+    if (best_node == NULL)
         return ERR_PTR(-ENOSPC);
 
-    n = free_list[r];
-    list_remove(n, r);
-    off = (int)ptr_to_off(n);
+    r = best_rank;
+    list_remove(best_node, r);
+    off = (int)best_off;
 
     while (r > rank) {
         int buddy_off;
@@ -133,6 +147,8 @@ int return_pages(void *p)
     struct node *bn;
 
     if (p == NULL || base == NULL)
+        return -EINVAL;
+    if (!is_page_aligned(p))
         return -EINVAL;
 
     off = (int)ptr_to_off(p);
@@ -174,6 +190,8 @@ int query_ranks(void *p)
     int off, rank;
 
     if (p == NULL || base == NULL)
+        return -EINVAL;
+    if (!is_page_aligned(p))
         return -EINVAL;
 
     off = (int)ptr_to_off(p);
