@@ -5,7 +5,7 @@
 #define MIN_RANK 1
 #define PAGE_SHIFT 12
 #define PAGE_SIZE  (1u << PAGE_SHIFT)
-#define MAX_PAGES  (1u << (MAX_RANK - 1))
+#define MAX_PAGES  (1 << (MAX_RANK - 1))
 
 struct node {
     struct node *next;
