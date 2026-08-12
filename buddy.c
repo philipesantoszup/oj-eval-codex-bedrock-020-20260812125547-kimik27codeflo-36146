@@ -16,6 +16,7 @@ static void       *base = NULL;
 static int         total_pages = 0;
 static signed char ranks[MAX_PAGES];
 static struct node *free_list[MAX_RANK + 1];
+static int         free_counts[MAX_RANK + 1];
 
 static inline unsigned long ptr_to_off(void *p)
 {
@@ -39,6 +40,7 @@ static void list_add(int rank, struct node *n)
     if (free_list[rank])
         free_list[rank]->prev = n;
     free_list[rank] = n;
+    free_counts[rank]++;
 }
 
 static void list_remove(struct node *n, int rank)
@@ -49,6 +51,7 @@ static void list_remove(struct node *n, int rank)
         free_list[rank] = n->next;
     if (n->next)
         n->next->prev = n->prev;
+    free_counts[rank]--;
 }
 
 int init_page(void *p, int pgcount)
@@ -61,8 +64,10 @@ int init_page(void *p, int pgcount)
     base = p;
     total_pages = pgcount;
 
-    for (rank = 0; rank <= MAX_RANK; ++rank)
+    for (rank = 0; rank <= MAX_RANK; ++rank) {
         free_list[rank] = NULL;
+        free_counts[rank] = 0;
+    }
 
     for (off = 0; off < total_pages; ++off)
         ranks[off] = 0;
@@ -186,14 +191,8 @@ int query_ranks(void *p)
 
 int query_page_counts(int rank)
 {
-    int count = 0;
-    struct node *n;
-
     if (rank < MIN_RANK || rank > MAX_RANK)
         return -EINVAL;
 
-    for (n = free_list[rank]; n != NULL; n = n->next)
-        ++count;
-
-    return count;
+    return free_counts[rank];
 }
